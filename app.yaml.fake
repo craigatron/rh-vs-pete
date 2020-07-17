@@ -1,0 +1,24 @@
+runtime: python38
+
+env_variables:
+  API_KEY: 'lolno'
+
+handlers:
+- url: /index.html
+  static_files: index.html
+  upload: index.html
+  expiration: 0s
+
+- url: /
+  static_files: index.html
+  upload: index.html
+  expiration: 0s
+
+- url: /route
+  static_dir: routecsv
+
+- url: /static
+  static_dir: static
+
+- url: /.*
+  script: auto

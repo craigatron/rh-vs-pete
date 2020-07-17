@@ -1,0 +1,163 @@
+<html>
+    <head>
+        <style>
+            html, body {height: 100%; width: 100%; margin: 0; font-family: 'Roboto', sans-serif;}
+            #mapid {height: 100%; width: 100%;}
+            #stats {
+                background-color: #fff;
+                width: 200px;
+                height: 150px;
+                position: absolute;
+                bottom: 10px;
+                left: 10px;
+                z-index: 1000;
+                padding: 5px;
+            }
+            #loading {
+                font-size: 100px;
+                color: gray;
+                font-weight: bold;
+                position: absolute;
+                top: 50px;
+                left: 50px;
+                z-index: 1000;
+            }
+        </style>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css"
+        integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ=="
+        crossorigin=""/>
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+        <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"
+        integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew=="
+        crossorigin=""></script>
+        <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.2.0/papaparse.min.js"></script>
+    </head>
+    <body>
+        <div id="mapid"></div>
+        <div id="loading">Loading...</div>
+        <div id="stats">
+            <h2 id="currentDay">Day X</h2>
+            <p><b>RH Mileage:</b> <span id="rhMileage"></span></p>
+            <p><b>Pete Mileage:</b> <span id="peteMileage"></span></p>
+        </div>
+    </body>
+    <script type="text/javascript">
+        $(document).ready(() => {
+            var loadingCounter = 2;
+            const rhMileage = localStorage.getItem('rhMileage');
+            if (rhMileage) {
+                $('#rhMileage').text(rhMileage + ' miles');
+            }
+            const peteMileage = localStorage.getItem('peteMileage');
+            if (peteMileage) {
+                $('#peteMileage').text(peteMileage + ' miles');
+            }
+            const raceDay = localStorage.getItem('raceDay');
+            if (raceDay) {
+                $('#currentDay').text('Day ' + raceDay);
+            }
+
+            const COLORS = [
+                '#ff0000',
+                '#fc0c00',
+                '#f91800',
+                '#f62300',
+                '#f32e00',
+                '#f03900',
+                '#ed4400',
+                '#ea4e00',
+                '#e75800',
+                '#e46200',
+                '#e16b00',
+                '#de7400',
+                '#db7d00',
+                '#d88600',
+                '#d58e00',
+                '#d29600',
+                '#cf9d00',
+                '#cca500',
+                '#c9ac00',
+                '#c6b300',
+                '#c3b900',
+                '#bfbf00',
+                '#b4bc00',
+                '#a8b900',
+                '#9cb600',
+                '#91b300',
+                '#86b000',
+                '#7cad00',
+                '#72aa00',
+                '#68a700',
+                '#5ea400',
+                '#54a100',
+                '#4b9e00',
+                '#439b00',
+                '#3a9800',
+                '#329500',
+                '#2a9200',
+                '#228f00',
+                '#1b8c00',
+                '#148900',
+                '#0d8600',
+                '#068300',
+                '#008000',
+            ]
+
+            var mymap = L.map('mapid').setView([39.8283, -98.5795], 5);
+            L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+                attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+                maxZoom: 18,
+                id: 'mapbox/streets-v11',
+                tileSize: 512,
+                zoomOffset: -1,
+                accessToken: 'pk.eyJ1IjoiY3JhaWdhdHJvbiIsImEiOiJja2NsMHdkYTkwYXowMnFtcXlwczJ5cnExIn0.7Pmay5hPbS7HDODOXOeiww'
+            }).addTo(mymap);
+            for (const i of Array(43).keys()) {
+                if (i == 6) {
+                    // Pete's break day
+                    continue;
+                }
+                Papa.parse('/route/day' + (i + 1) + '.csv', {
+                    download: true,
+                    header: true,
+                    complete: (results) => {
+                        var startMarker = L.marker([results.data[0]['lat'], results.data[0]['lon']], {title: 'Start of Pete\'s day ' + (i + 1)}).addTo(mymap);
+                        var polyline = L.polyline(results.data.filter(x => x['lat']).map(x => [parseFloat(x['lat']), parseFloat(x['lon'])]), {color: COLORS[i]}).addTo(mymap);
+                    }
+                });
+            }
+
+            $.getJSON('/api/rh_mileage', data => {
+                $('#rhMileage').text(data['rh_dist'] + ' miles');
+                localStorage.setItem('rhMileage', data['rh_dist']);
+                var rhMarker = L.marker(data['rh_pos'], {
+                    icon: L.icon({
+                        iconUrl: '/static/rh.png',
+                    }),
+                }).addTo(mymap);
+                var circle = L.circleMarker(data['rh_pos'], {radius: 10}).addTo(mymap);
+                loadingCounter -= 1;
+                if (loadingCounter == 0) {
+                    $('#loading').hide();
+                }
+            });
+            $.getJSON('/api/pete_mileage', data => {
+                $('#peteMileage').text(data['pete_mileage'] + ' miles');
+                localStorage.setItem('peteMileage', data['pete_mileage']);
+                $('#currentDay').text('Day ' + data['event_day']);
+                localStorage.setItem('raceDay', data['event_day']);
+                var peteMarker = L.marker(data['pete_pos'], {
+                    icon: L.icon({
+                        iconUrl: '/static/pete.png',
+                    }),
+                }).addTo(mymap);
+                var circle = L.circleMarker(data['pete_pos'], {radius: 10}).addTo(mymap);
+                loadingCounter -= 1;
+                if (loadingCounter == 0) {
+                    $('#loading').hide();
+                }
+            });
+        });
+    </script>
+</html>
