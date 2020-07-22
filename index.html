@@ -2,11 +2,14 @@
     <head>
         <style>
             html, body {height: 100%; width: 100%; margin: 0; font-family: 'Roboto', sans-serif;}
+            p {
+                margin-bottom: 10px;
+                margin-top: 10px;
+            }
             #mapid {height: 100%; width: 100%;}
             #stats {
-                background-color: #fff;
-                width: 200px;
-                height: 150px;
+                background-color: rgba(255, 255, 255, 0.5);
+                border-radius: 10px;
                 position: absolute;
                 bottom: 10px;
                 left: 10px;
@@ -23,6 +26,8 @@
                 z-index: 1000;
             }
         </style>
+        <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css"
         integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ=="
         crossorigin=""/>
@@ -32,14 +37,26 @@
         crossorigin=""></script>
         <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.2.0/papaparse.min.js"></script>
+        <!-- Global site tag (gtag.js) - Google Analytics -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=UA-173129966-1"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+
+            gtag('config', 'UA-173129966-1');
+        </script>
+
+        <title>Road Hazahds vs. virtual Pete Kostelnick 2020</title>
     </head>
     <body>
         <div id="mapid"></div>
         <div id="loading">Loading...</div>
         <div id="stats">
             <h2 id="currentDay">Day X</h2>
-            <p><b>RH Mileage:</b> <span id="rhMileage"></span></p>
-            <p><b>Pete Mileage:</b> <span id="peteMileage"></span></p>
+            <p><b>RH Mileage:</b> <span id="rhMileage"></span> <span id="rhCity"></span></p>
+            <p><b>Pete Mileage:</b> <span id="peteMileage"></span> <span id="peteCity"></span></p>
+            <p><a href="https://forms.gle/Urqe52ExJM5eJvY28" target="_blank">Add your run!</a></p>
         </div>
     </body>
     <script type="text/javascript">
@@ -130,6 +147,9 @@
 
             $.getJSON('/api/rh_mileage', data => {
                 $('#rhMileage').text(data['rh_dist'] + ' miles');
+                if (data['rh_city']) {
+                    $('#rhCity').text('(' + data['rh_city'] + ')')
+                }
                 localStorage.setItem('rhMileage', data['rh_dist']);
                 var rhMarker = L.marker(data['rh_pos'], {
                     icon: L.icon({
@@ -144,6 +164,9 @@
             });
             $.getJSON('/api/pete_mileage', data => {
                 $('#peteMileage').text(data['pete_mileage'] + ' miles');
+                if (data['pete_city']) {
+                    $('#peteCity').text('(' + data['pete_city'] + ')')
+                }
                 localStorage.setItem('peteMileage', data['pete_mileage']);
                 $('#currentDay').text('Day ' + data['event_day']);
                 localStorage.setItem('raceDay', data['event_day']);

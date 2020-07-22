@@ -1,12 +1,15 @@
+import csv
 import os
-from flask import Flask
+from datetime import date, datetime, tzinfo
+
+import firebase_admin
+import googlemaps
+import requests
+from firebase_admin import credentials, firestore
+from flask import Flask, request
 from flask.json import jsonify
 from googleapiclient.discovery import build
-import requests
-import csv
 from pytz import timezone
-
-from datetime import date, datetime, tzinfo
 
 app = Flask(__name__)
 
@@ -14,6 +17,12 @@ RH_DAY_1 = date(2020, 7, 10)
 
 RH_SPREADSHEET_ID = '1wq_i99CWPCbmSjQGuqR7LROOnrCS8aBvbsbBgENMgH0'
 TIME_ZONE = timezone('America/New_York')
+GMAPS = googlemaps.Client(key=os.environ['API_KEY'])
+
+cred = credentials.ApplicationDefault()
+firebase_admin.initialize_app(cred, {
+    'projectId': 'rh-vs-pete'
+})
 
 PETE_MILEAGE = [
     80.90, # 9/12 1
@@ -61,11 +70,10 @@ PETE_MILEAGE = [
     88.28, # 10/24 43
 ]
 
-@app.route('/api/rh_mileage')
-def rh_mileage():
+def _get_rh_mileage():
     service = build('sheets', 'v4', developerKey=os.environ['API_KEY'])
     sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=RH_SPREADSHEET_ID, range='Form Responses 1!G1').execute()
+    result = sheet.values().get(spreadsheetId=RH_SPREADSHEET_ID, range='Form Responses 1!F1').execute()
     values = result.get('values', [])
 
     rh_miles = float(values[0][0])
@@ -90,10 +98,14 @@ def rh_mileage():
             break
         rh_pos = (float(trkpt[0]), float(trkpt[1]))
 
-    return jsonify({'rh_dist': rh_miles, 'rh_pos': rh_pos})
+    return {'rh_dist': rh_miles, 'rh_pos': rh_pos, 'rh_city': get_city(rh_pos)}
 
-@app.route('/api/pete_mileage')
-def pete_mileage():
+@app.route('/api/rh_mileage')
+def rh_mileage():
+    db = firestore.client()
+    return jsonify(db.collection('stats').document('rh').get().to_dict())
+
+def _get_pete_mileage():
     event_day = (datetime.now(TIME_ZONE).date() - RH_DAY_1).days + 1
     now = datetime.now(TIME_ZONE)
 
@@ -122,5 +134,45 @@ def pete_mileage():
                 break
             pete_pos = (float(trkpt[0]), float(trkpt[1]))
 
-    return jsonify({'pete_mileage': round(pete_total_mileage, 2), 'pete_pos': pete_pos, 'event_day': event_day})
+    return {
+        'pete_mileage': round(pete_total_mileage, 2), 
+        'pete_pos': pete_pos,
+        'pete_city': get_city(pete_pos),
+        'event_day': event_day}
 
+@app.route('/api/pete_mileage')
+def pete_mileage():
+    db = firestore.client()
+    return jsonify(db.collection('stats').document('pete').get().to_dict())
+
+def get_city(pos) -> str:
+    result = GMAPS.reverse_geocode(pos)
+    if not result or 'address_components' not in result[0]:
+        return None
+
+    city = None
+    state = None
+    county = None
+    for component in result[0]['address_components']:
+        component_type = component.get('types', [''])
+        if component_type[0] == 'administrative_area_level_2':
+            county = component['short_name']
+        elif component_type[0] == 'administrative_area_level_1':
+            state = component['short_name']
+        elif component_type == ['locality', 'political']:
+            city = component['short_name']
+
+    if (city or county) and state:
+        return f'{city if city else county}, {state}'
+
+    return None
+
+@app.route('/_/update')
+def update():
+    if not request.headers.get('X-Appengine-Cron'):
+        return jsonify({'status': 'only robots allowed'})
+
+    db = firestore.client()
+    db.collection('stats').document('rh').set(_get_rh_mileage())
+    db.collection('stats').document('pete').set(_get_pete_mileage())
+    return jsonify({'status': 'ok'})

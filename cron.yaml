@@ -1,0 +1,4 @@
+cron:
+- description: update mileages
+  url: /_/update
+  schedule: every 5 minutes
